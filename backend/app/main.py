@@ -14,7 +14,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routers import auth, hosted_zones, dns_records
+from app.routers import auth, hosted_zones, dns_records, query_simulator
 
 # Auto-create tables on startup (no migrations needed for simple SQLite setup)
 Base.metadata.create_all(bind=engine)
@@ -27,23 +27,13 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Setup
-origins = []
-if "*" in settings.cors_origins:
-    # Since we use HttpOnly cookies, we MUST specify exact domains.
-    # We include standard development environments and production ports.
-    origins = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ]
-else:
-    origins = settings.cors_origins
-
+# CORS Setup: Secure and flexible origin checks
+# Since we use HttpOnly cookies with credentials, we cannot use allow_origins=["*"].
+# We use allow_origin_regex to match localhost, loopback, and any direct IPv4 address 
+# (useful for public Azure VM prototype deployment) on any port.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3})(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,6 +43,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(hosted_zones.router, prefix="/api")
 app.include_router(dns_records.router, prefix="/api")
+app.include_router(query_simulator.router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 def health_check():

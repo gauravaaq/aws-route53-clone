@@ -44,11 +44,13 @@ def login(
 
 @router.post("/logout", status_code=status.HTTP_200_OK, summary="Clear authentication session")
 def logout(response: Response, current_user: User = Depends(get_current_user)):
+    is_prod = settings.ENV == "production"
     response.delete_cookie(
         key="access_token",
         path="/",
         httponly=True,
-        samesite="lax"
+        samesite="lax",
+        secure=is_prod
     )
     return {"detail": "Successfully logged out"}
 
