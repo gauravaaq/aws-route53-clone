@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pydantic-settings
+bcrypt
+pyjwt
+python-multipart
+pytest
+httpx
+email-validator
