@@ -15,7 +15,7 @@ services:
       - ALLOWED_ORIGINS=*
       - SECRET_KEY=dev_secret_key_change_me_in_production_1234567890
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,11 +24,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://20.205.16.177:8000
     ports:
       - "3001:3001"
     environment:
       # Tell Next.js where the API is hosted (from client-side browser's perspective)
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://20.205.16.177:8000
     depends_on:
       backend:
         condition: service_healthy

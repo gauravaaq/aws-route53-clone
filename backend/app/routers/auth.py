@@ -27,8 +27,7 @@ def login(
     token = create_access_token(subject=user.id)
     
     # Set HTTP-only cookie
-    # Secure=True in production, False in development for easy testing
-    is_prod = settings.ENV == "production"
+    # Secure=True in production, but set to False here to allow demo HTTP public IP VM deployments
     response.set_cookie(
         key="access_token",
         value=token,
@@ -36,7 +35,7 @@ def login(
         max_age=1800,  # 30 minutes
         expires=1800,
         samesite="lax",
-        secure=is_prod,
+        secure=False,
         path="/"
     )
     
@@ -44,13 +43,12 @@ def login(
 
 @router.post("/logout", status_code=status.HTTP_200_OK, summary="Clear authentication session")
 def logout(response: Response, current_user: User = Depends(get_current_user)):
-    is_prod = settings.ENV == "production"
     response.delete_cookie(
         key="access_token",
         path="/",
         httponly=True,
         samesite="lax",
-        secure=is_prod
+        secure=False
     )
     return {"detail": "Successfully logged out"}
 

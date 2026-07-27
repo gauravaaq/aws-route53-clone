@@ -1,0 +1,15 @@
+.git
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+backend/venv
+backend/data/*.db
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/build
+npm-debug.log
