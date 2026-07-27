@@ -1,6 +1,6 @@
 # AWS Route53 Clone Console
 
-This project is a high-fidelity systems-design clone of the AWS Route53 web management console. It is designed to replicate the user experience, core workflows, and layout structures of the official Route53 administration portal. It provides complete hosted zone administration and DNS record set management. It is explicitly not a functional DNS nameserver: it does not serve zone files, resolve DNS queries over UDP/TCP port 53, support DNSSEC, or integrate directly with registrar domain booking APIs. Authentication is fully modeled using hashed credentials and JWT tokens stored in secure cookies, and all administrative data is persisted in a local relational schema.
+This project is a high-fidelity systems-design clone of the AWS Route53 web management console. It is designed to replicate the user experience, core workflows, and layout structures of the official Route53 administration portal. It provides complete hosted zone administration and DNS record set management. It is explicitly not a functional DNS nameserver: it does not serve zone files, resolve DNS queries over UDP/TCP port 53, support DNSSEC, or integrate directly with registrar domain booking APIs. The application includes a mock DNS Query Simulator sandbox to resolve local queries (including CNAME chasing and wildcard matching) inside the console, but it does not act as a real DNS resolver for external networks. Authentication is fully modeled using hashed credentials and JWT tokens stored in secure cookies, and all administrative data is persisted in a local relational schema.
 
 ---
 
@@ -19,6 +19,7 @@ This project is a high-fidelity systems-design clone of the AWS Route53 web mana
 | Resolver (Inbound/Outbound) | Scoped Out | frontend/src/app/(dashboard)/resolver/ (Coming Soon Page) |
 | Profiles | Scoped Out | frontend/src/app/(dashboard)/profiles/page.tsx (Coming Soon Page) |
 | BIND import/export | Not Implemented | Scoped Out |
+| DNS Query Simulator (Sandbox) | Implemented | backend/app/routers/query_simulator.py, frontend/src/app/(dashboard)/dns-test/ |
 | Dark mode | Implemented | frontend/src/components/ui/TopNav.tsx, frontend/src/app/globals.css |
 | Keyboard shortcuts | Implemented | frontend/src/app/(dashboard)/layout.tsx |
 | Bulk operations (Bulk Delete Zones) | Implemented | frontend/src/app/(dashboard)/hosted-zones/page.tsx |
@@ -201,10 +202,10 @@ All validation rules are enforced synchronously inside the backend service layer
 | **IPv6 Address format** | Validates string represents a legal IPv6 address using Python's `ipaddress` module. | `validate_ipv6` in `backend/app/services/dns_validators.py` | RFC 3596 |
 | **CNAME Apex Block** | Blocks creation of CNAME records where the record name equals the zone name. | `validate_record_value` in `backend/app/services/dns_validators.py` | RFC 1034 Section 3.6.2 |
 | **CNAME Exclusivity** | Checks if name has any existing records before adding CNAME, or if name has CNAME before adding another record. | `create_record` in `backend/app/services/dns_record_service.py` | RFC 1034 Section 3.6.2 |
-| **MX Port/Priority Range** | Verifies priority is an integer between 0 and 65535, and mail server is a valid hostname. | `validate_record_value` in `backend/app/services/dns_validators.py` | RFC 5321 |
+| **MX Port/Priority Range** | Verifies priority is an integer between 0 and 65535, and mail server is a valid hostname. | `validate_record_value` in `backend/app/services/dns_validators.py` | RFC 1035 Section 3.3.9 |
 | **SRV Format Constraints** | Verifies priority, weight, and port are between 0 and 65535. Target must be a valid hostname or `.`. | `validate_record_value` in `backend/app/services/dns_validators.py` | RFC 2782 |
 | **CAA Format constraints** | Validates flag is 0 or 128. Validates tag matches `issue`, `issuewild`, or `iodef`. | `validate_record_value` in `backend/app/services/dns_validators.py` | RFC 8659 |
-| **TTL Bounds Enforcement** | Enforces TTL is a positive integer greater than or equal to 0. | Schema model parsing checks. | RFC 1035 |
+| **TTL Bounds Enforcement** | Enforces TTL is a positive integer greater than or equal to 0. | Pydantic model validator constraints (`ge=0` on `ttl` field) in `backend/app/schemas/dns_record.py` | RFC 1035 |
 
 ### CNAME Exclusivity Decision Path
 The following flowchart illustrates how the service layer prevents CNAME conflicts:
@@ -241,7 +242,7 @@ graph TD
 | **POST** | `/api/hosted-zones/{id}/records` | Add a new record | Yes | `201 Created`, `409 Conflict`, `422 Unprocessable`, `401` |
 | **PUT** | `/api/hosted-zones/{id}/records/{r_id}` | Edit an existing record | Yes | `200 OK`, `409 Conflict`, `422 Unprocessable`, `404` |
 | **DELETE** | `/api/hosted-zones/{id}/records/{r_id}` | Delete a record (blocks apex NS/SOA deletion) | Yes | `204 No Content`, `400 Bad Request`, `404 Not Found` |
-| **POST** | `/api/query-resolver` | Query simulation endpoint | Yes | `200 OK`, `422 Unprocessable`, `401` |
+| **GET** | `/api/dns-simulator/resolve` | Simulate DNS lookup query (CNAME chasing and wildcard resolution) | Yes | `200 OK`, `422 Unprocessable`, `401` |
 
 ### 7.2 Response Envelope Example
 List actions return the data wrapped inside a standardized pagination layout:
@@ -291,7 +292,7 @@ sequenceDiagram
     User->>API: POST /api/auth/login (JSON credentials)
     Note over API: Authenticate user in DB
     Note over API: Generate JWT signed with HS256
-    API-->>User: 200 OK (Set-Cookie: access_token=jwt_val; HttpOnly; SameSite=Lax)
+    API-->>User: 200 OK, Set-Cookie access_token=jwt_val, HttpOnly, SameSite=Lax
     
     User->>API: GET /api/hosted-zones (Cookie automatically attached)
     Note over API: Parse JWT token from request cookies
@@ -341,7 +342,7 @@ frontend/
     │   └── zones/
     │       ├── ZoneCreateModal.tsx
     │       └── ZoneEditModal.tsx
-    └── src/app/
+    └── app/
         ├── globals.css
         ├── layout.tsx
         ├── page.tsx
@@ -514,4 +515,4 @@ graph LR
 
 1. **BIND File parser integration**: Add a file upload parser on the frontend to parse raw BIND zone files and translate standard resource records (A, AAAA, MX) into backend API payloads automatically.
 2. **VPC Association Engine**: Fully model private zone attachment to multiple mock VPC network profiles to reflect real-world hybrid DNS resolution configurations.
-3. **Route53 DNS Lookup Playground**: Connect the query simulator interface to a mock query resolution loop, allowing users to test query resolution directly in the browser.
+3. **DNS Query Routing Engines**: Implement routing policies such as weighted routing, latency-based routing, failover routing, and geolocation routing simulation inside the resolver engine.
